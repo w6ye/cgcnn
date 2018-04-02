@@ -320,3 +320,73 @@ class CIFData(Dataset):
         nbr_fea_idx = torch.LongTensor(nbr_fea_idx)
         target = torch.Tensor([float(target)])
         return (atom_fea, nbr_fea, nbr_fea_idx), target, cif_id
+
+
+
+
+class MPData(Dataset):
+    """
+    The MPData dataset is a wrapper for a dataset from Materials Project.
+
+
+    atom_init.json: a JSON file that stores the initialization vector for each
+    element.
+    ID.cif: a CIF file that recodes the crystal structure, where ID is the
+    unique ID for the crystal.
+    Parameters
+    ----------
+    criteria: dict
+        Mongo-like query language for MP structures
+    atom_init_file_dir: str
+        dir of the atom_init_file.json
+    max_num_nbr: int
+        The maximum number of neighbors while constructing the crystal graph
+    radius: float
+        The cutoff radius for searching neighbors
+    dmin: float
+        The minimum distance for constructing GaussianDistance
+    step: float
+        The step size for constructing GaussianDistance
+    random_seed: int
+        Random seed for shuffling the dataset
+    Returns
+    -------
+    atom_fea: torch.Tensor shape (n_i, atom_fea_len)
+    nbr_fea: torch.Tensor shape (n_i, M, nbr_fea_len)
+    nbr_fea_idx: torch.LongTensor shape (n_i, M)
+    target: torch.Tensor shape (1, )
+    cif_id: str or int
+    """
+
+    def __init__(self, criteria, atom_init_file_dir, max_num_nbr=12, radius=8, dmin=0, step=0.2, random_seed=123):
+        mp_list = [i['material_id'] for i in m.query(criteria=criteria, properties=['material_id'])]
+        self.max_num_nbr, self.radius = max_num_nbr, radius
+        atom_init_file = atom_init_file_dir
+        self.ari = AtomCustomJSONInitializer(atom_init_file)
+        self.gdf = GaussianDistance(dmin=dmin, dmax=self.radius, step=step)
+
+        self.id_prop_data = [(target, cif_id) for target, cif_id in enumerate(mp_list)]
+
+    def __len__(self):
+        return len(self.id_prop_data)
+
+    @functools.lru_cache(maxsize=None)
+    def __getitem__(self, idx):
+        target, cif_id = self.id_prop_data[idx]
+        crystal = m.get_structure_by_material_id(cif_id)
+        atom_fea = np.vstack([self.ari.get_atom_fea(crystal[i].specie.number)
+                              for i in range(len(crystal))])
+        atom_fea = torch.Tensor(atom_fea)
+        all_nbrs = crystal.get_all_neighbors(self.radius, include_index=True)
+        all_nbrs = [sorted(nbrs, key=lambda x: x[1]) for nbrs in all_nbrs]
+        nbr_fea_idx = np.array([list(map(lambda x: x[2],
+                                         nbr[:self.max_num_nbr]) for nbr in all_nbrs)]
+                               )
+        nbr_fea = np.array([list(map(lambda x: x[1], nbr[: self.max_num_nbr])) \
+                            for nbr in all_nbrs]
+                           )
+        atom_fea = torch.Tensor(atom_fea)
+        nbr_fea = torch.Tensor(nbr_fea)
+        nbr_fea_idx = torch.LongTensor(nbr_fea_idx)
+        target = torch.Tensor([float(target)])
+        return (atom_fea, nbr_fea, nbr_fea_idx), target, cif_id
