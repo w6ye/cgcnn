@@ -359,12 +359,7 @@ class MPData(Dataset):
     cif_id: str or int
     """
 
-    def __init__(self, criteria, atom_init_file_dir, max_num_nbr=12, radius=8, dmin=0, step=0.2, random_seed=123):
-
-        try:
-            api_key = os.environ['PMG_MAPI_KEY']
-        except:
-            raise ValueError("No PMG_MAPI_KEY")
+    def __init__(self, criteria, atom_init_file_dir, api_key="VIqD4QUxH6wNpyc5", max_num_nbr=12, radius=8, dmin=0, step=0.2, random_seed=123):
         self.api = MPRester(api_key)
         mp_list = [i['material_id'] for i in self.api.query(criteria=criteria, properties=['material_id'])]
         self.max_num_nbr, self.radius = max_num_nbr, radius
