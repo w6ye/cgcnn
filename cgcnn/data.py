@@ -12,6 +12,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 from torch.utils.data.sampler import SubsetRandomSampler
 from pymatgen.core.structure import Structure
+from pymatgen import MPRester
 
 
 def get_train_val_test_loader(dataset, collate_fn=default_collate,
@@ -359,7 +360,9 @@ class MPData(Dataset):
     """
 
     def __init__(self, criteria, atom_init_file_dir, max_num_nbr=12, radius=8, dmin=0, step=0.2, random_seed=123):
-        mp_list = [i['material_id'] for i in m.query(criteria=criteria, properties=['material_id'])]
+
+        self.api = MPRester()
+        mp_list = [i['material_id'] for i in self.api.query(criteria=criteria, properties=['material_id'])]
         self.max_num_nbr, self.radius = max_num_nbr, radius
         atom_init_file = atom_init_file_dir
         self.ari = AtomCustomJSONInitializer(atom_init_file)
@@ -367,13 +370,15 @@ class MPData(Dataset):
 
         self.id_prop_data = [(target, cif_id) for target, cif_id in enumerate(mp_list)]
 
+        
+
     def __len__(self):
         return len(self.id_prop_data)
 
     @functools.lru_cache(maxsize=None)
     def __getitem__(self, idx):
         target, cif_id = self.id_prop_data[idx]
-        crystal = m.get_structure_by_material_id(cif_id)
+        crystal = self.api.get_structure_by_material_id(cif_id)
         atom_fea = np.vstack([self.ari.get_atom_fea(crystal[i].specie.number)
                               for i in range(len(crystal))])
         atom_fea = torch.Tensor(atom_fea)
