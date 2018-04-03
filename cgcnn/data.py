@@ -361,7 +361,11 @@ class MPData(Dataset):
 
     def __init__(self, criteria, atom_init_file_dir, max_num_nbr=12, radius=8, dmin=0, step=0.2, random_seed=123):
 
-        self.api = MPRester()
+        try:
+            api_key = os.environ['PMG_MAPI_KEY']
+        except:
+            raise ValueError("No PMG_MAPI_KEY")
+        self.api = MPRester(api_key)
         mp_list = [i['material_id'] for i in self.api.query(criteria=criteria, properties=['material_id'])]
         self.max_num_nbr, self.radius = max_num_nbr, radius
         atom_init_file = atom_init_file_dir
@@ -370,7 +374,7 @@ class MPData(Dataset):
 
         self.id_prop_data = [(target, cif_id) for target, cif_id in enumerate(mp_list)]
 
-        
+
 
     def __len__(self):
         return len(self.id_prop_data)
